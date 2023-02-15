@@ -1,0 +1,81 @@
+import json
+#import libraries
+from datetime import datetime, timedelta,date
+import pandas as pd
+import numpy as np
+import boto3
+import awswrangler as wr
+
+s3_client = boto3.client('s3')
+
+def lambda_handler(event, context):
+    try:
+            
+        bucket_name = 's3://dataeng-landing-zone-rld/purchase/'
+        s3_file_name = 'OnlineRetail.csv'
+        
+        tx_data = wr.s3.read_csv(bucket_name + s3_file_name)
+        #obj = s3_client.get_object(Bucket=bucket_name, Key= s3_file_name)
+        #tx_data = pd.read_csv(obj['Body']) # 'Body' is a key word
+        #print(df.head())
+        
+        #convert date field from string to datetime
+        tx_data['InvoiceDate'] = pd.to_datetime(tx_data['InvoiceDate'])
+        
+        tx_data.columns.replace('', np.nan, inplace=True)
+        tx_data.dropna()
+        #create dataframe with uk data only
+        #tx_uk = tx_data.query("Country=='United Kingdom'").reset_index(drop=True)
+        
+        result = save_parquet('purchase', 'OnlineRetail', 'dataeng-landing-zone-rld','purchase/OnlineRetail.csv')
+        
+
+    except Exception as err:
+        print(err)
+        
+        
+    
+        
+    # TODO implement
+    return {
+        'statusCode': 200,
+        'body': json.dumps('Hello fr2om Lambda!')
+    }
+
+
+def save_parquet(db_name, table_name, bucket, key, input_df):
+    # We will set the DB and table name based on the last two elements of 
+    # the path prior to the file name. If key = 'dms/sakila/film/LOAD01.csv',
+    # then the following lines will set db to sakila and table_name to 'film
+    print(f'Bucket: {bucket}')
+    print(f'Key: {key}')
+    print(f'DB Name: {db_name}')
+    print(f'Table Name: {table_name}')
+    
+    input_path = f"s3://{bucket}/{key}"
+    print(f'Input_Path: {input_path}')
+    output_path = f"s3://dataeng-cleanzone-rld/{db_name}/{table_name}"
+    print(f'Output_Path: {output_path}')
+    
+    #input_df = wr.s3.read_csv([input_path])
+    
+    current_databases = wr.catalog.databases()
+    wr.catalog.databases()
+    if db_name not in current_databases.values:
+        print(f'- Database {db_name} does not exist ... creating')
+        wr.catalog.create_database(db_name)
+    else:
+        print(f'- Database {db_name} already exists')
+    
+    result = wr.s3.to_parquet(
+        df=input_df, 
+        path=output_path, 
+        dataset=True,
+        database=db_name,
+        table=table_name,
+        mode="append")
+        
+    print("RESULT: ")
+    print(f'{result}')
+    
+    return result
